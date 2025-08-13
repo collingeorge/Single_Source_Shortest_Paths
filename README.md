@@ -145,7 +145,7 @@ Fork this repository, submit issues, or pull requests. Suggestions like parallel
 
 ## License
 
-[MIT License](LICENSE) (or specify your preferred license).
+[MIT License](LICENSE).
 
 ## Acknowledgements
 
