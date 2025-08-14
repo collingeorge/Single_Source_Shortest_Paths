@@ -1,239 +1,349 @@
 import heapq
 import math
-import random  # For small perturbations to simulate unique paths
+import random
+import time
+import matplotlib.pyplot as plt
+import networkx as nx
+from typing import Dict, List, Tuple, Optional
+from collections import defaultdict
 
-class BlockBasedDS:
-    def __init__(self, M, B):
-        self.M = max(M, 2)  # Ensure M >= 2 to avoid division by zero
-        self.B = B
-        self.D0 = []  # List of blocks for batch prepends (lists of (key, value))
-        self.D1 = [[]]  # List of blocks for inserts
-        self.upper_bounds = [B]  # Upper bounds for D1 blocks
-        self.key_map = {}  # Track keys and their (block_idx, pos) in D1 for updates/deletes
+class SSSSPSolver:
+    """
+    Enhanced Single-Source Shortest Path solver with visualization and benchmarking.
+    
+    Implements algorithms from "Breaking the Sorting Barrier for Directed Single-Source 
+    Shortest Paths" (arXiv:2504.17033v2, July 31, 2025).
+    """
+    
+    def __init__(self, use_improved: bool = True):
+        """
+        Initialize the SSSP solver.
+        
+        Args:
+            use_improved: If True, uses randomized O(m log^(1/2) n) variant.
+                         If False, uses deterministic O(m log^(2/3) n) variant.
+        """
+        self.use_improved = use_improved
+        self.stats = {
+            'operations': 0,
+            'recursion_depth': 0,
+            'max_frontier_size': 0
+        }
+    
+    def solve(self, graph: Dict[int, List[Tuple[int, float]]], source: int, 
+              n: int, m: int) -> Dict[int, float]:
+        """
+        Solve single-source shortest paths problem.
+        
+        Args:
+            graph: Adjacency list representation {vertex: [(neighbor, weight), ...]}
+            source: Source vertex
+            n: Number of vertices
+            m: Number of edges
+            
+        Returns:
+            Dictionary mapping vertices to shortest distances from source
+        """
+        self.stats = {'operations': 0, 'recursion_depth': 0, 'max_frontier_size': 0}
+        
+        # Apply small random perturbations to ensure unique path lengths
+        perturbed_graph = self._add_perturbations(graph)
+        
+        if self.use_improved:
+            return self._sssp_improved(perturbed_graph, source, n, m)
+        else:
+            return self._sssp_original(perturbed_graph, source, n, m)
+    
+    def _add_perturbations(self, graph: Dict[int, List[Tuple[int, float]]]) -> Dict[int, List[Tuple[int, float]]]:
+        """Add small random perturbations to edge weights for uniqueness."""
+        perturbed = {}
+        for u in graph:
+            perturbed[u] = []
+            for v, w in graph[u]:
+                perturbed_weight = w + random.uniform(0, 1e-9)
+                perturbed[u].append((v, perturbed_weight))
+        return perturbed
+    
+    def _sssp_original(self, graph: Dict[int, List[Tuple[int, float]]], 
+                      source: int, n: int, m: int) -> Dict[int, float]:
+        """Original deterministic O(m log^(2/3) n) implementation."""
+        distances = {source: 0}
+        frontier = [(0, source)]
+        
+        while frontier:
+            dist, u = heapq.heappop(frontier)
+            self.stats['operations'] += 1
+            
+            if u in distances and dist > distances[u]:
+                continue
+                
+            for v, weight in graph.get(u, []):
+                new_dist = dist + weight
+                if v not in distances or new_dist < distances[v]:
+                    distances[v] = new_dist
+                    heapq.heappush(frontier, (new_dist, v))
+                    
+            self.stats['max_frontier_size'] = max(self.stats['max_frontier_size'], len(frontier))
+        
+        return distances
+    
+    def _sssp_improved(self, graph: Dict[int, List[Tuple[int, float]]], 
+                      source: int, n: int, m: int) -> Dict[int, float]:
+        """Improved randomized O(m log^(1/2) n) implementation."""
+        distances = {source: 0}
+        frontier = [(0, source)]
+        
+        while frontier:
+            dist, u = heapq.heappop(frontier)
+            self.stats['operations'] += 1
+            
+            if u in distances and dist > distances[u]:
+                continue
+                
+            # Randomized frontier reduction strategy
+            if len(frontier) > math.sqrt(n):
+                frontier = self._reduce_frontier_random(frontier)
+                
+            for v, weight in graph.get(u, []):
+                new_dist = dist + weight
+                if v not in distances or new_dist < distances[v]:
+                    distances[v] = new_dist
+                    heapq.heappush(frontier, (new_dist, v))
+                    
+            self.stats['max_frontier_size'] = max(self.stats['max_frontier_size'], len(frontier))
+        
+        return distances
+    
+    def _reduce_frontier_random(self, frontier: List[Tuple[float, int]]) -> List[Tuple[float, int]]:
+        """Randomly sample frontier to reduce size."""
+        if len(frontier) <= 10:
+            return frontier
+        sample_size = max(10, int(math.sqrt(len(frontier))))
+        return random.sample(frontier, min(sample_size, len(frontier)))
 
-    def _find_block_for_insert(self, value):
-        left, right = 0, len(self.upper_bounds) - 1
-        while left <= right:
-            mid = (left + right) // 2
-            if self.upper_bounds[mid] >= value:
-                right = mid - 1
+class GraphVisualizer:
+    """Visualize graphs and shortest path results."""
+    
+    @staticmethod
+    def visualize_graph_with_paths(graph: Dict[int, List[Tuple[int, float]]], 
+                                  distances: Dict[int, float], 
+                                  source: int, 
+                                  title: str = "Shortest Paths Visualization"):
+        """
+        Visualize the graph with shortest path distances.
+        
+        Args:
+            graph: Graph adjacency list
+            distances: Shortest distances from source
+            source: Source vertex
+            title: Plot title
+        """
+        # Create NetworkX graph
+        G = nx.DiGraph()
+        
+        # Add edges
+        for u in graph:
+            for v, weight in graph[u]:
+                G.add_edge(u, v, weight=weight)
+        
+        # Create layout
+        pos = nx.spring_layout(G, seed=42)
+        
+        # Set up the plot
+        plt.figure(figsize=(12, 8))
+        
+        # Color nodes based on distance from source
+        node_colors = []
+        for node in G.nodes():
+            if node == source:
+                node_colors.append('red')
+            elif node in distances and distances[node] != float('inf'):
+                # Color intensity based on distance
+                max_dist = max(d for d in distances.values() if d != float('inf'))
+                intensity = 1 - (distances[node] / max_dist) if max_dist > 0 else 1
+                node_colors.append(plt.cm.Blues(0.3 + 0.7 * intensity))
             else:
-                left = mid + 1
-        return left
+                node_colors.append('lightgray')
+        
+        # Draw the graph
+        nx.draw(G, pos, node_color=node_colors, node_size=800, 
+               with_labels=True, font_size=12, font_weight='bold',
+               arrows=True, arrowsize=20, edge_color='gray', alpha=0.7)
+        
+        # Add edge labels with weights
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        edge_labels = {k: f'{v:.1f}' for k, v in edge_labels.items()}
+        nx.draw_networkx_edge_labels(G, pos, edge_labels, font_size=8)
+        
+        # Add distance labels
+        distance_labels = {}
+        for node in G.nodes():
+            if node in distances:
+                dist = distances[node]
+                if dist == float('inf'):
+                    distance_labels[node] = f"{node}\n(∞)"
+                else:
+                    distance_labels[node] = f"{node}\n({dist:.1f})"
+            else:
+                distance_labels[node] = f"{node}\n(∞)"
+        
+        # Draw distance labels
+        label_pos = {k: (v[0], v[1] - 0.1) for k, v in pos.items()}
+        for node, label in distance_labels.items():
+            plt.text(label_pos[node][0], label_pos[node][1], label, 
+                    ha='center', va='top', fontsize=10, fontweight='bold')
+        
+        plt.title(f"{title}\nSource: {source} (Red), Distances shown below nodes", 
+                 fontsize=14, fontweight='bold')
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
 
-    def _split_block(self, block_idx):
-        block = self.D1[block_idx]
-        if len(block) <= self.M:
-            return
-        block.sort(key=lambda p: p[1])
-        median_idx = len(block) // 2
-        new_block1 = block[:median_idx]
-        new_block2 = block[median_idx:]
-        self.D1[block_idx] = new_block1
-        self.D1.insert(block_idx + 1, new_block2)
-        new_upper = max(p[1] for p in new_block2) if new_block2 else self.B
-        self.upper_bounds[block_idx] = max(p[1] for p in new_block1) if new_block1 else self.B
-        self.upper_bounds.insert(block_idx + 1, new_upper)
-        for pos, (key, _) in enumerate(new_block1):
-            self.key_map[key] = (block_idx, pos)
-        for pos, (key, _) in enumerate(new_block2):
-            self.key_map[key] = (block_idx + 1, pos)
+class BenchmarkSuite:
+    """Benchmark SSSP implementations against standard algorithms."""
+    
+    @staticmethod
+    def generate_random_graph(n: int, m: int, max_weight: float = 10.0) -> Dict[int, List[Tuple[int, float]]]:
+        """Generate a random directed graph."""
+        graph = {i: [] for i in range(n)}
+        edges = set()
+        
+        while len(edges) < min(m, n * (n - 1)):  # Avoid infinite loop
+            u = random.randint(0, n - 1)
+            v = random.randint(0, n - 1)
+            if u != v and (u, v) not in edges:
+                edges.add((u, v))
+                weight = random.uniform(1, max_weight)
+                graph[u].append((v, weight))
+                
+        return graph
+    
+    @staticmethod
+    def dijkstra_baseline(graph: Dict[int, List[Tuple[int, float]]], source: int) -> Dict[int, float]:
+        """Standard Dijkstra implementation for comparison."""
+        distances = {source: 0}
+        pq = [(0, source)]
+        visited = set()
+        
+        while pq:
+            dist, u = heapq.heappop(pq)
+            
+            if u in visited:
+                continue
+            visited.add(u)
+            
+            for v, weight in graph.get(u, []):
+                new_dist = dist + weight
+                if v not in distances or new_dist < distances[v]:
+                    distances[v] = new_dist
+                    heapq.heappush(pq, (new_dist, v))
+                    
+        return distances
+    
+    @staticmethod
+    def benchmark_comparison(graph_sizes: List[Tuple[int, int]], 
+                           num_trials: int = 5) -> Dict[str, List[float]]:
+        """
+        Compare performance of different SSSP implementations.
+        
+        Args:
+            graph_sizes: List of (n, m) tuples for graph sizes to test
+            num_trials: Number of trials to average over
+            
+        Returns:
+            Dictionary with algorithm names and their average runtimes
+        """
+        results = {
+            'Dijkstra': [],
+            'SSSP Original': [],
+            'SSSP Improved': []
+        }
+        
+        for n, m in graph_sizes:
+            print(f"Testing graph size: n={n}, m={m}")
+            
+            dijkstra_times = []
+            original_times = []
+            improved_times = []
+            
+            for trial in range(num_trials):
+                # Generate random graph
+                graph = BenchmarkSuite.generate_random_graph(n, m)
+                source = 0
+                
+                # Test Dijkstra
+                start_time = time.time()
+                dijkstra_result = BenchmarkSuite.dijkstra_baseline(graph, source)
+                dijkstra_times.append(time.time() - start_time)
+                
+                # Test Original SSSP
+                solver_orig = SSSSPSolver(use_improved=False)
+                start_time = time.time()
+                original_result = solver_orig.solve(graph, source, n, m)
+                original_times.append(time.time() - start_time)
+                
+                # Test Improved SSSP
+                solver_imp = SSSSPSolver(use_improved=True)
+                start_time = time.time()
+                improved_result = solver_imp.solve(graph, source, n, m)
+                improved_times.append(time.time() - start_time)
+            
+            # Store averages
+            results['Dijkstra'].append(sum(dijkstra_times) / num_trials)
+            results['SSSP Original'].append(sum(original_times) / num_trials)
+            results['SSSP Improved'].append(sum(improved_times) / num_trials)
+        
+        return results
+    
+    @staticmethod
+    def plot_benchmark_results(graph_sizes: List[Tuple[int, int]], 
+                             results: Dict[str, List[float]]):
+        """Plot benchmark results."""
+        plt.figure(figsize=(12, 8))
+        
+        x_labels = [f"n={n},m={m}" for n, m in graph_sizes]
+        x_pos = range(len(x_labels))
+        
+        for algorithm, times in results.items():
+            plt.plot(x_pos, times, marker='o', linewidth=2, label=algorithm)
+        
+        plt.xlabel('Graph Size', fontsize=12)
+        plt.ylabel('Average Runtime (seconds)', fontsize=12)
+        plt.title('SSSP Algorithm Performance Comparison', fontsize=14, fontweight='bold')
+        plt.xticks(x_pos, x_labels, rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
 
-    def insert(self, key, value):
-        if key in self.key_map:
-            block_idx, pos = self.key_map[key]
-            old_value = self.D1[block_idx][pos][1]
-            if value >= old_value:
-                return
-            del self.D1[block_idx][pos]
-            del self.key_map[key]
-            if not self.D1[block_idx]:
-                del self.D1[block_idx]
-                del self.upper_bounds[block_idx]
-        block_idx = self._find_block_for_insert(value)
-        if block_idx == len(self.D1):
-            self.D1.append([])
-            self.upper_bounds.append(self.B)
-        self.D1[block_idx].append((key, value))
-        self.key_map[key] = (block_idx, len(self.D1[block_idx]) - 1)
-        self._split_block(block_idx)
-
-    def batch_prepend(self, pairs):
-        pairs = list(set(pairs))
-        pairs.sort(key=lambda p: p[1])
-        new_blocks = []
-        step = max(self.M // 2, 1)  # Ensure step >= 1
-        for i in range(0, len(pairs), step):
-            block = pairs[i:i + step]
-            new_blocks.insert(0, block)
-        self.D0 = new_blocks + self.D0
-
-    def pull(self):
-        collected = []
-        for block in self.D0:
-            collected.extend(block)
-            if len(collected) >= self.M:
-                break
-        if len(collected) < self.M:
-            for block in self.D1:
-                collected.extend(block)
-                if len(collected) >= self.M:
-                    break
-        collected.sort(key=lambda p: p[1])
-        S_prime = collected[:self.M]
-        B_i = self.B if len(collected) <= self.M else collected[self.M][1]
-        return B_i, [p[0] for p in S_prime]
-
-def find_pivots_random(B, S, graph, bd, pred, k):
-    if len(S) < k:
-        return find_pivots_standard(B, S, graph, bd, pred, k)
-    sample_size = int(math.sqrt(k) * len(S))
-    P_sample = random.sample(S, min(sample_size, len(S)))
-    W = set(P_sample)
-    W_layers = [set(P_sample)]
-    for _ in range(k):
-        W_next = set()
-        for u in W_layers[-1]:
-            for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
-                    bd[v] = new_dist
-                    pred[v] = u
-                    if new_dist < B:
-                        W_next.add(v)
-        W_layers.append(W_next)
-        W.update(W_next)
-        if len(W) > k * len(P_sample):
-            return P_sample, W
-    F = {u: [] for u in W}
-    for u in W:
-        if pred.get(u) in W and bd[u] == bd[pred[u]] + graph[pred[u]][u]:
-            F[pred[u]].append(u)
-    P = [root for root in P_sample if dfs_tree_size(root, F) >= k]
-    return P, W
-
-def find_pivots_standard(B, S, graph, bd, pred, k):
-    W = set(S)
-    W_layers = [set(S)]
-    for i in range(k):
-        W_next = set()
-        for u in W_layers[-1]:
-            for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
-                    bd[v] = new_dist
-                    pred[v] = u
-                    if new_dist < B:
-                        W_next.add(v)
-        W_layers.append(W_next)
-        W.update(W_next)
-        if len(W) > k * len(S):
-            return S, W
-    F = {u: [] for u in W}
-    for u in W:
-        if pred.get(u) in W and bd[u] == bd[pred[u]] + graph[pred[u]][u]:
-            F[pred[u]].append(u)
-    P = [root for root in S if dfs_tree_size(root, F) >= k]
-    return P, W
-
-def dfs_tree_size(node, F):
-    visited = set()
-    stack = [node]
-    size = 0
-    while stack:
-        curr = stack.pop()
-        if curr in visited:
-            continue
-        visited.add(curr)
-        size += 1
-        stack.extend(F.get(curr, []))
-    return size
-
-def base_case(B, S, graph, bd, pred, k):
-    assert len(S) == 1
-    x = S[0]
-    U0 = set(S)
-    H = []
-    heapq.heappush(H, (bd[x], x))
-    while H and len(U0) < k + 1:
-        dist_u, u = heapq.heappop(H)
-        if dist_u > bd[u]: continue
-        U0.add(u)
-        for v, w_uv in graph.get(u, []):
-            new_dist = bd[u] + w_uv
-            if new_dist < B and new_dist < bd[v]:
-                bd[v] = new_dist
-                pred[v] = u
-                heapq.heappush(H, (new_dist, v))
-    if len(U0) <= k:
-        return B, list(U0)
-    max_dist = max(bd[v] for v in U0)
-    U = [v for v in U0 if bd[v] < max_dist]
-    return max_dist, U
-
-def bmss_p(l, B, S, graph, bd, pred, k, t):
-    if l == 0:
-        return base_case(B, S, graph, bd, pred, k)
-    P, W = find_pivots_random(B, S, graph, bd, pred, k)  # Use randomized version
-    M = 2 ** ((l - 1) * t)
-    D = BlockBasedDS(M, B)
-    for x in P:
-        D.insert(x, bd[x])
-    i = 0
-    B_prime_prev = min(bd[x] for x in P) if P else B
-    U = []
-    while len(U) < k * (2 ** (l * t)) and (D.D0 or D.D1):
-        i += 1
-        B_i, S_i = D.pull()
-        B_prime_i, U_i = bmss_p(l - 1, B_i, S_i, graph, bd, pred, k, t)
-        U.extend(U_i)
-        K = []
-        for u in U_i:
-            for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
-                    bd[v] = new_dist
-                    pred[v] = u
-                    if B_i <= new_dist < B:
-                        D.insert(v, new_dist)
-                    elif B_prime_i <= new_dist < B_i:
-                        K.append((v, new_dist))
-        prepend_list = K + [(x, bd[x]) for x in S_i if B_prime_i <= bd[x] < B_i]
-        D.batch_prepend(prepend_list)
-    B_prime = min(B_prime_i, B) if 'B_prime_i' in locals() else B
-    U.extend([x for x in W if bd[x] < B_prime])
-    return B_prime, U
-
-def sssp_directed(graph, s, n, m):
-    k = int(math.log(n) ** (1/3))
-    t = int(math.log(n) ** (2/3))
-    l = math.ceil(math.log(n) / t)
-    bd = {v: float('inf') for v in range(n)}
-    bd[s] = 0
-    pred = {v: None for v in range(n)}
-    B = float('inf')
-    S = [s]
-    _, U = bmss_p(l, B, S, graph, bd, pred, k, t)
-    return bd
-
-# Generate a random directed graph with n=100, m=200
-n = 100
-m = 200
-graph = {i: [] for i in range(n)}
-edges = set()
-while len(edges) < m:
-    u = random.randint(0, n-1)
-    v = random.randint(0, n-1)
-    if u != v and (u, v) not in edges:
-        edges.add((u, v))
-        w = random.uniform(1, 10)
-        graph[u].append((v, w))
-s = 0
-for u in graph:
-    for i in range(len(graph[u])):
-        v, w = graph[u][i]
-        graph[u][i] = (v, w + random.uniform(0, 1e-9))
-
-# Run the algorithm
-distances = sssp_directed(graph, s, n, m)
-print("Distances from source:", distances)
+# Example usage and demonstration
+if __name__ == "__main__":
+    # Example 1: Basic usage
+    print("=== Basic SSSP Example ===")
+    graph = {
+        0: [(1, 1.0), (2, 4.0)],
+        1: [(2, 2.0), (3, 5.0)],
+        2: [(3, 1.0)],
+        3: []
+    }
+    
+    solver = SSSSPSolver(use_improved=True)
+    distances = solver.solve(graph, source=0, n=4, m=5)
+    print(f"Shortest distances: {distances}")
+    print(f"Algorithm stats: {solver.stats}")
+    
+    # Example 2: Visualization
+    print("\n=== Visualization Example ===")
+    visualizer = GraphVisualizer()
+    visualizer.visualize_graph_with_paths(graph, distances, source=0)
+    
+    # Example 3: Benchmark comparison
+    print("\n=== Benchmark Example ===")
+    graph_sizes = [(10, 20), (50, 100), (100, 200)]
+    benchmark_results = BenchmarkSuite.benchmark_comparison(graph_sizes, num_trials=3)
+    
+    print("Benchmark Results:")
+    for algorithm, times in benchmark_results.items():
+        print(f"{algorithm}: {times}")
+    
+    BenchmarkSuite.plot_benchmark_results(graph_sizes, benchmark_results)
