@@ -140,8 +140,8 @@ def find_pivots_deterministic(B, S, graph, bd, pred, k):
         return [], set()
     W = set(S)
     layers = [set(S)]
-    # Increase layers to ensure broader exploration
-    for _ in range(max(k, int(math.log(len(graph)) * 2))):  # Doubled layers for better coverage
+    # Further increase layers for broader exploration
+    for _ in range(max(k, int(math.log(len(graph)) * 3))):  # Tripled layers
         next_layer = set()
         for u in layers[-1]:
             for v, w_uv in graph.get(u, []):
@@ -163,7 +163,7 @@ def find_pivots_deterministic(B, S, graph, bd, pred, k):
         for child in forest.get(node, []):
             size += subtree_size(child)
         return size
-    pivots = [root for root in S if subtree_size(root) >= max(k, len(S) // 10)]  # Adjust k based on graph size
+    pivots = [root for root in S if subtree_size(root) >= max(k, len(S) // 50)]  # Lowered threshold to 1/50
     return pivots, W
 
 def base_case(B, S, graph, bd, pred, k):
@@ -173,7 +173,7 @@ def base_case(B, S, graph, bd, pred, k):
     source = S[0]
     discovered = set()
     pq = [(bd[source], source)]
-    while pq and len(discovered) < max(k, len(graph) // 100):  # Increase k to explore more nodes
+    while pq and len(discovered) < max(k * 2, len(graph) // 50):  # Doubled k and lowered threshold
         dist, u = heapq.heappop(pq)
         if dist > bd.get(u, float('inf')):
             continue
@@ -197,7 +197,7 @@ def base_case(B, S, graph, bd, pred, k):
 
 def bmss_p(l, B, S, graph, bd, pred, k, t):
     """Main recursive SSSP algorithm."""
-    if l == 0 or len(S) <= 1:
+    if l == 0 or len(S) <= 1 or l > math.log2(max(len(graph), 2)):  # Increased max recursion depth
         return base_case(B, S, graph, bd, pred, k)
     pivots, W = find_pivots_deterministic(B, S, graph, bd, pred, k)
     if not pivots:
@@ -237,9 +237,9 @@ def bmss_p(l, B, S, graph, bd, pred, k, t):
 
 def sssp_directed(graph, source, n, m):
     """Main SSSP entry point."""
-    k = max(int(math.log(max(n, 2)) ** (1/3) * 2), 2)  # Increased k factor
+    k = max(int(math.log(max(n, 2)) ** (1/2)), 5)  # Increased k factor to square root
     t = max(int(math.log(max(n, 2)) ** (2/3)), 1)
-    l = max(math.ceil(math.log(max(n, 2)) / max(t, 1)), 1)
+    l = max(math.ceil(math.log(max(n, 2)) / max(t, 1) * 1.5), 2)  # Increased recursion depth by 50%
     bd = {source: 0}
     pred = {source: None}
     for node in graph:
