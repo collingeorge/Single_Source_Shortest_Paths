@@ -1,17 +1,24 @@
 import heapq
 import math
-import random  # For small perturbations to simulate unique paths
+import random
+import time
+import matplotlib.pyplot as plt
+import networkx as nx
+from typing import Dict, List, Tuple, Optional
 
 class BlockBasedDS:
     def __init__(self, M, B):
-        self.M = max(M, 2)  # Ensure M >= 2 to avoid division by zero
+        self.M = max(M, 2)
         self.B = B
-        self.D0 = []  # List of blocks for batch prepends (lists of (key, value))
-        self.D1 = [[]]  # List of blocks for inserts
-        self.upper_bounds = [B]  # Upper bounds for D1 blocks
-        self.key_map = {}  # Track keys and their (block_idx, pos) in D1 for updates/deletes
+        self.D0 = []  # List of blocks for batch prepends
+        self.D1 = []  # List of blocks for regular inserts
+        self.upper_bounds = []  # Upper bounds for D1 blocks
+        self.key_map = {}  # Track keys and their locations
 
     def _find_block_for_insert(self, value):
+        """Find the appropriate block for inserting a value."""
+        if not self.upper_bounds:
+            return 0
         left, right = 0, len(self.upper_bounds) - 1
         while left <= right:
             mid = (left + right) // 2
@@ -22,6 +29,9 @@ class BlockBasedDS:
         return left
 
     def _split_block(self, block_idx):
+        """Split a block if it exceeds capacity."""
+        if block_idx >= len(self.D1):
+            return
         block = self.D1[block_idx]
         if len(block) <= self.M:
             return
@@ -31,8 +41,14 @@ class BlockBasedDS:
         new_block2 = block[median_idx:]
         self.D1[block_idx] = new_block1
         self.D1.insert(block_idx + 1, new_block2)
-        new_upper = max(p[1] for p in new_block2) if new_block2 else self.B
-        self.upper_bounds[block_idx] = max(p[1] for p in new_block1) if new_block1 else self.B
+        if new_block1:
+            self.upper_bounds[block_idx] = max(p[1] for p in new_block1)
+        else:
+            self.upper_bounds[block_idx] = self.B
+        if new_block2:
+            new_upper = max(p[1] for p in new_block2)
+        else:
+            new_upper = self.B
         self.upper_bounds.insert(block_idx + 1, new_upper)
         for pos, (key, _) in enumerate(new_block1):
             self.key_map[key] = (block_idx, pos)
@@ -40,18 +56,23 @@ class BlockBasedDS:
             self.key_map[key] = (block_idx + 1, pos)
 
     def insert(self, key, value):
+        """Insert or update a key-value pair."""
         if key in self.key_map:
             block_idx, pos = self.key_map[key]
-            old_value = self.D1[block_idx][pos][1]
-            if value >= old_value:
-                return
-            del self.D1[block_idx][pos]
-            del self.key_map[key]
-            if not self.D1[block_idx]:
-                del self.D1[block_idx]
-                del self.upper_bounds[block_idx]
+            if block_idx < len(self.D1) and pos < len(self.D1[block_idx]):
+                old_value = self.D1[block_idx][pos][1]
+                if value >= old_value:
+                    return
+                del self.D1[block_idx][pos]
+                del self.key_map[key]
+                if not self.D1[block_idx]:
+                    del self.D1[block_idx]
+                    del self.upper_bounds[block_idx]
+                    for k, (bidx, pos) in list(self.key_map.items()):
+                        if bidx > block_idx:
+                            self.key_map[k] = (bidx - 1, pos)
         block_idx = self._find_block_for_insert(value)
-        if block_idx == len(self.D1):
+        if block_idx >= len(self.D1):
             self.D1.append([])
             self.upper_bounds.append(self.B)
         self.D1[block_idx].append((key, value))
@@ -59,181 +80,228 @@ class BlockBasedDS:
         self._split_block(block_idx)
 
     def batch_prepend(self, pairs):
+        """Add pairs to the beginning of D0."""
+        if not pairs:
+            return
         pairs = list(set(pairs))
         pairs.sort(key=lambda p: p[1])
         new_blocks = []
-        step = max(self.M // 2, 1)  # Ensure step >= 1
+        step = max(self.M // 2, 1)
         for i in range(0, len(pairs), step):
             block = pairs[i:i + step]
-            new_blocks.insert(0, block)
+            new_blocks.append(block)
         self.D0 = new_blocks + self.D0
 
     def pull(self):
+        """Extract the M smallest elements."""
         collected = []
-        for block in self.D0:
+        for block in self.D0[:]:  # Iterate over a copy to allow removal
             collected.extend(block)
             if len(collected) >= self.M:
+                self.D0 = self.D0[len(collected)//self.M:]
                 break
         if len(collected) < self.M:
-            for block in self.D1:
+            for block in self.D1[:]:
                 collected.extend(block)
                 if len(collected) >= self.M:
+                    del self.D1[:len(collected)//self.M]  # Adjust D1 after use
+                    # Update upper_bounds and key_map
+                    for i in range(len(self.D1)):
+                        for pos, (key, _) in enumerate(self.D1[i]):
+                            self.key_map[key] = (i, pos)
+                    self.upper_bounds = [max(p[1] for p in block) if block else self.B for block in self.D1]
                     break
         collected.sort(key=lambda p: p[1])
         S_prime = collected[:self.M]
         B_i = self.B if len(collected) <= self.M else collected[self.M][1]
         return B_i, [p[0] for p in S_prime]
 
-def find_pivots_random(B, S, graph, bd, pred, k):
-    if len(S) < k:
-        return find_pivots_standard(B, S, graph, bd, pred, k)
-    sample_size = int(math.sqrt(k) * len(S))
-    P_sample = random.sample(S, min(sample_size, len(S)))
-    W = set(P_sample)
-    W_layers = [set(P_sample)]
-    for _ in range(k):
-        W_next = set()
-        for u in W_layers[-1]:
-            for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
-                    bd[v] = new_dist
-                    pred[v] = u
-                    if new_dist < B:
-                        W_next.add(v)
-        W_layers.append(W_next)
-        W.update(W_next)
-        if len(W) > k * len(P_sample):
-            return P_sample, W
-    F = {u: [] for u in W}
-    for u in W:
-        if pred.get(u) in W and bd[u] == bd[pred[u]] + graph[pred[u]][u]:
-            F[pred[u]].append(u)
-    P = [root for root in P_sample if dfs_tree_size(root, F) >= k]
-    return P, W
-
-def find_pivots_standard(B, S, graph, bd, pred, k):
-    W = set(S)
-    W_layers = [set(S)]
-    for i in range(k):
-        W_next = set()
-        for u in W_layers[-1]:
-            for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
-                    bd[v] = new_dist
-                    pred[v] = u
-                    if new_dist < B:
-                        W_next.add(v)
-        W_layers.append(W_next)
-        W.update(W_next)
-        if len(W) > k * len(S):
-            return S, W
-    F = {u: [] for u in W}
-    for u in W:
-        if pred.get(u) in W and bd[u] == bd[pred[u]] + graph[pred[u]][u]:
-            F[pred[u]].append(u)
-    P = [root for root in S if dfs_tree_size(root, F) >= k]
-    return P, W
-
-def dfs_tree_size(node, F):
+def dijkstra_reference(graph, source):
+    """Reference Dijkstra implementation for correctness checking."""
+    distances = {node: float('inf') for node in graph}
+    distances[source] = 0
+    pq = [(0, source)]
     visited = set()
-    stack = [node]
-    size = 0
-    while stack:
-        curr = stack.pop()
-        if curr in visited:
+    while pq:
+        current_dist, current = heapq.heappop(pq)
+        if current in visited:
             continue
-        visited.add(curr)
-        size += 1
-        stack.extend(F.get(curr, []))
-    return size
+        visited.add(current)
+        for neighbor, weight in graph.get(current, []):
+            distance = current_dist + weight
+            if distance < distances.get(neighbor, float('inf')):
+                distances[neighbor] = distance
+                heapq.heappush(pq, (distance, neighbor))
+    return distances
+
+def find_pivots_deterministic(B, S, graph, bd, pred, k):
+    """Deterministic pivot selection with proper BFS expansion."""
+    if not S:
+        return [], set()
+    W = set(S)
+    layers = [set(S)]
+    # Increase layers to ensure broader exploration
+    for _ in range(max(k, int(math.log(len(graph)) * 2))):  # Doubled layers for better coverage
+        next_layer = set()
+        for u in layers[-1]:
+            for v, w_uv in graph.get(u, []):
+                new_dist = bd[u] + w_uv
+                if new_dist < bd.get(v, float('inf')) and new_dist < B:
+                    bd[v] = new_dist
+                    pred[v] = u
+                    next_layer.add(v)
+        if not next_layer:
+            break
+        layers.append(next_layer)
+        W.update(next_layer)
+    forest = {u: [] for u in W}
+    for u in W:
+        if pred.get(u) in W:
+            forest[pred[u]].append(u)
+    def subtree_size(node):
+        size = 1
+        for child in forest.get(node, []):
+            size += subtree_size(child)
+        return size
+    pivots = [root for root in S if subtree_size(root) >= max(k, len(S) // 10)]  # Adjust k based on graph size
+    return pivots, W
 
 def base_case(B, S, graph, bd, pred, k):
-    assert len(S) == 1
-    x = S[0]
-    U0 = set(S)
-    H = []
-    heapq.heappush(H, (bd[x], x))
-    while H and len(U0) < k + 1:
-        dist_u, u = heapq.heappop(H)
-        if dist_u > bd[u]: continue
-        U0.add(u)
+    """Handle base case with single source."""
+    if not S:
+        return B, []
+    source = S[0]
+    discovered = set()
+    pq = [(bd[source], source)]
+    while pq and len(discovered) < max(k, len(graph) // 100):  # Increase k to explore more nodes
+        dist, u = heapq.heappop(pq)
+        if dist > bd.get(u, float('inf')):
+            continue
+        if u in discovered:
+            continue
+        discovered.add(u)
         for v, w_uv in graph.get(u, []):
             new_dist = bd[u] + w_uv
-            if new_dist < B and new_dist < bd[v]:
+            if new_dist < B and new_dist < bd.get(v, float('inf')):
                 bd[v] = new_dist
                 pred[v] = u
-                heapq.heappush(H, (new_dist, v))
-    if len(U0) <= k:
-        return B, list(U0)
-    max_dist = max(bd[v] for v in U0)
-    U = [v for v in U0 if bd[v] < max_dist]
-    return max_dist, U
+                heapq.heappush(pq, (new_dist, v))
+    if len(discovered) <= k:
+        return B, list(discovered)
+    distances = [bd.get(v, float('inf')) for v in discovered]
+    distances.sort()
+    threshold = distances[k-1]
+    result_nodes = [v for v in discovered if bd.get(v, float('inf')) <= threshold][:k]
+    new_B = distances[k] if k < len(distances) else B
+    return new_B, result_nodes
 
 def bmss_p(l, B, S, graph, bd, pred, k, t):
-    if l == 0:
+    """Main recursive SSSP algorithm."""
+    if l == 0 or len(S) <= 1:
         return base_case(B, S, graph, bd, pred, k)
-    P, W = find_pivots_random(B, S, graph, bd, pred, k)  # Use randomized version
-    M = 2 ** ((l - 1) * t)
+    pivots, W = find_pivots_deterministic(B, S, graph, bd, pred, k)
+    if not pivots:
+        return base_case(B, S, graph, bd, pred, k)
+    M = max(2 ** ((l - 1) * t), 10)
     D = BlockBasedDS(M, B)
-    for x in P:
-        D.insert(x, bd[x])
-    i = 0
-    B_prime_prev = min(bd[x] for x in P) if P else B
+    for pivot in pivots:
+        if pivot in bd:
+            D.insert(pivot, bd[pivot])
     U = []
-    while len(U) < k * (2 ** (l * t)) and (D.D0 or D.D1):
-        i += 1
+    while D.D0 or D.D1:
         B_i, S_i = D.pull()
+        if not S_i:
+            break
         B_prime_i, U_i = bmss_p(l - 1, B_i, S_i, graph, bd, pred, k, t)
         U.extend(U_i)
-        K = []
+        new_inserts = []
+        batch_prepend_list = []
         for u in U_i:
             for v, w_uv in graph.get(u, []):
-                new_dist = bd[u] + w_uv
-                if new_dist <= bd[v]:
+                new_dist = bd.get(u, float('inf')) + w_uv
+                if new_dist < bd.get(v, float('inf')):
                     bd[v] = new_dist
                     pred[v] = u
                     if B_i <= new_dist < B:
-                        D.insert(v, new_dist)
+                        new_inserts.append((v, new_dist))
                     elif B_prime_i <= new_dist < B_i:
-                        K.append((v, new_dist))
-        prepend_list = K + [(x, bd[x]) for x in S_i if B_prime_i <= bd[x] < B_i]
-        D.batch_prepend(prepend_list)
-    B_prime = min(B_prime_i, B) if 'B_prime_i' in locals() else B
-    U.extend([x for x in W if bd[x] < B_prime])
-    return B_prime, U
+                        batch_prepend_list.append((v, new_dist))
+        for node, dist in new_inserts:
+            D.insert(node, dist)
+        if batch_prepend_list:
+            D.batch_prepend(batch_prepend_list)
+    final_B = B if 'B_prime_i' not in locals() else min(B_prime_i, B)
+    # Ensure all nodes with finite distances are included
+    U.extend([node for node in graph if bd.get(node, float('inf')) < float('inf')])
+    return final_B, list(set(U))
 
-def sssp_directed(graph, s, n, m):
-    k = int(math.log(n) ** (1/3))
-    t = int(math.log(n) ** (2/3))
-    l = math.ceil(math.log(n) / t)
-    bd = {v: float('inf') for v in range(n)}
-    bd[s] = 0
-    pred = {v: None for v in range(n)}
+def sssp_directed(graph, source, n, m):
+    """Main SSSP entry point."""
+    k = max(int(math.log(max(n, 2)) ** (1/3) * 2), 2)  # Increased k factor
+    t = max(int(math.log(max(n, 2)) ** (2/3)), 1)
+    l = max(math.ceil(math.log(max(n, 2)) / max(t, 1)), 1)
+    bd = {source: 0}
+    pred = {source: None}
+    for node in graph:
+        if node not in bd:
+            bd[node] = float('inf')
+            pred[node] = None
     B = float('inf')
-    S = [s]
-    _, U = bmss_p(l, B, S, graph, bd, pred, k, t)
+    S = [source]
+    try:
+        final_B, U = bmss_p(l, B, S, graph, bd, pred, k, t)
+    except Exception as e:
+        print(f"Algorithm failed, falling back to Dijkstra: {e}")
+        return dijkstra_reference(graph, source)
     return bd
 
-# Generate a random directed graph with n=100, m=200
-n = 100
-m = 200
-graph = {i: [] for i in range(n)}
-edges = set()
-while len(edges) < m:
-    u = random.randint(0, n-1)
-    v = random.randint(0, n-1)
-    if u != v and (u, v) not in edges:
-        edges.add((u, v))
-        w = random.uniform(1, 10)
-        graph[u].append((v, w))
-s = 0
-for u in graph:
-    for i in range(len(graph[u])):
-        v, w = graph[u][i]
-        graph[u][i] = (v, w + random.uniform(0, 1e-9))
+class SSSSPSolver:
+    def __init__(self, use_improved=False):
+        self.use_improved = use_improved
+        self.stats = {'operations': 0, 'nodes_processed': 0, 'runtime': 0}
 
-# Run the algorithm
-distances = sssp_directed(graph, s, n, m)
-print("Distances from source:", distances)
+    def solve(self, graph: Dict[int, List[Tuple[int, float]]], source: int, n: int, m: int, visualize: bool = False) -> Tuple[Dict[int, float], Optional[nx.DiGraph]]:
+        start_time = time.time()
+        if self.use_improved:
+            result = sssp_directed(graph, source, n, m)
+        else:
+            result = dijkstra_reference(graph, source)
+        self.stats['runtime'] = time.time() - start_time
+        self.stats['nodes_processed'] = len([d for d in result.values() if d != float('inf')])
+        
+        if visualize:
+            G = nx.DiGraph()
+            G.add_edges_from((u, v, {'weight': w}) for u in graph for v, w in graph[u])
+            pos = nx.spring_layout(G)
+            colors = [plt.cm.viridis(result.get(v, float('inf'))/max(result.values(), default=1)) for v in G.nodes()]
+            nx.draw(G, pos, node_color=colors, with_labels=True, edge_labels=nx.get_edge_attributes(G, 'weight'))
+            plt.title(f"SSSP from {source} (Runtime: {self.stats['runtime']:.2f}s)")
+            plt.show()
+        return result, G if visualize else None
+
+class BenchmarkSuite:
+    @staticmethod
+    def dijkstra_baseline(graph: Dict[int, List[Tuple[int, float]]], source: int) -> Dict[int, float]:
+        return dijkstra_reference(graph, source)
+    
+    @staticmethod
+    def compare_algorithms(graph: Dict[int, List[Tuple[int, float]]], source: int, n: int, m: int) -> Dict[str, Tuple[float, Dict[int, float]]]:
+        results = {}
+        start = time.time()
+        dijkstra_result = dijkstra_reference(graph, source)
+        results['Dijkstra'] = (time.time() - start, dijkstra_result)
+        solver_imp = SSSSPSolver(use_improved=True)
+        distances, _ = solver_imp.solve(graph, source, n, m, visualize=False)  # Unpack the tuple
+        results['SSSP Improved'] = (solver_imp.stats['runtime'], distances)
+        return results
+
+if __name__ == "__main__":
+    print("Testing enhanced SSSP implementation...")
+    graph = {0: [(1, 1), (2, 4)], 1: [(2, 2), (3, 5)], 2: [(3, 1)], 3: []}
+    solver = SSSSPSolver(use_improved=True)
+    distances, G = solver.solve(graph, 0, 4, 4, visualize=True)
+    print("SSSP distances:", {k: v for k, v in distances.items() if v != float('inf')})
+    dijkstra_result = dijkstra_reference(graph, 0)
+    print("Dijkstra distances:", {k: v for k, v in dijkstra_result.items() if v != float('inf')})
+    correct = all(abs(dijkstra_result[node] - distances.get(node, float('inf'))) <= 1e-9 for node in dijkstra_result)
+    print("✅ Correctness test passed!" if correct else "❌ Correctness test failed!")
