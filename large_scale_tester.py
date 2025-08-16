@@ -402,7 +402,8 @@ def main():
             for alg_name, alg_data in graph_results.items():
                 f.write(f"  {alg_name}: {alg_data}\n")
         
-        f.write("\n\n" + report)
+        with open("results.txt", "w", encoding="utf-8") as f:
+    	    f.write("\n\n" + report)
     
     print(f"\n💾 Full results saved to: {filename}")
     print("\n🎯 NEXT STEPS:")
