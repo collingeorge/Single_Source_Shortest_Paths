@@ -1,0 +1,85 @@
+C:\Users\Collin\Downloads\Single_Source_Shortest_Paths-main> python enhanced_sssp.py
+
+=== Single-Pair Shortest Path (SPSP) Benchmarks ===
+All distances validated against baseline Dijkstra (early stop).
+Metrics: time, pops (PQ pops), relaxes (edge relax), pushes, pq_peak, mem_peak.
+
+--- Graph: grid | size≈10000 | trials=3 ---
+Dijkstra            time(ms) 103.55 ±4.55 | pops 12471.7 | relax 39592.3 | push 12472.3 | pq_peak 240.7 | mem_kb 1365 | path_len 200.3
+A*                  time(ms) 138.23 ±12.62 | pops 12561.3 | relax 39592.3 | push 12563.0 | pq_peak 316.7 | mem_kb 1366 | path_len 201.0
+Bidirectional ALT   time(ms) 13.16 ±7.71 | pops 475.7 | relax 1852.0 | push 1009.0 | pq_peak 535.3 | mem_kb 149 | path_len 200.3
+
+--- Graph: grid | size≈40000 | trials=3 ---
+Dijkstra            time(ms) 725.81 ±211.85 | pops 50161.7 | relax 159197.0 | push 50162.0 | pq_peak 515.0 | mem_kb 5702 | path_len 402.3
+A*                  time(ms) 923.51 ±232.33 | pops 50483.7 | relax 159195.0 | push 50486.0 | pq_peak 650.0 | mem_kb 5711 | path_len 402.3
+Bidirectional ALT   time(ms) 489.28 ±612.12 | pops 10073.7 | relax 29435.0 | push 12013.0 | pq_peak 3514.7 | mem_kb 1540 | path_len 401.7
+
+--- Graph: grid | size≈100000 | trials=3 ---
+Dijkstra            time(ms) 2087.82 ±82.09 | pops 125218.7 | relax 398156.0 | push 125218.7 | pq_peak 796.0 | mem_kb 18950 | path_len 641.0
+A*                  time(ms) 2861.26 ±85.96 | pops 125954.0 | relax 398155.0 | push 125955.3 | pq_peak 1075.3 | mem_kb 18965 | path_len 641.0
+Bidirectional ALT   time(ms) 2332.33 ±1656.04 | pops 54232.0 | relax 150681.3 | push 59445.3 | pq_peak 9956.3 | mem_kb 7099 | path_len 641.7
+
+
+=== Single-Pair Shortest Path (SPSP) Benchmarks ===
+All distances validated against baseline Dijkstra (early stop).
+Metrics: time, pops (PQ pops), relaxes (edge relax), pushes, pq_peak, mem_peak.
+
+--- Graph: er | size≈10000 | trials=3 ---
+Dijkstra            time(ms) 200.39 ±178.74 | pops 4173.0 | relax 25337.0 | push 9114.0 | pq_peak 5476.7 | mem_kb 1154 | path_len 8.3
+A*                  time(ms) 197.16 ±151.78 | pops 4173.0 | relax 25337.0 | push 9114.0 | pq_peak 5476.7 | mem_kb 1237 | path_len 8.3
+Bidirectional ALT   time(ms) 1.93 ±0.92 | pops 14.7 | relax 107.7 | push 95.0 | pq_peak 82.3 | mem_kb 11 | path_len 8.3
+
+--- Graph: er | size≈40000 | trials=3 ---
+Dijkstra            time(ms) 1376.49 ±325.58 | pops 39028.0 | relax 197500.7 | push 54651.3 | pq_peak 30311.7 | mem_kb 8064 | path_len 10.7
+A*                  time(ms) 1355.44 ±313.12 | pops 39028.0 | relax 197500.7 | push 54651.3 | pq_peak 30311.7 | mem_kb 8490 | path_len 10.7
+Bidirectional ALT   time(ms) 1.66 ±0.28 | pops 26.7 | relax 186.3 | push 161.7 | pq_peak 137.0 | mem_kb 18 | path_len 10.7
+
+--- Graph: er | size≈100000 | trials=3 ---
+Dijkstra            time(ms) 2591.19 ±979.05 | pops 62320.3 | relax 365944.7 | push 121330.7 | pq_peak 72194.3 | mem_kb 19061 | path_len 11.7
+A*                  time(ms) 2965.59 ±876.19 | pops 62320.3 | relax 365944.7 | push 121330.7 | pq_peak 72194.3 | mem_kb 20274 | path_len 11.7
+Bidirectional ALT   time(ms) 2.48 ±0.88 | pops 22.0 | relax 165.3 | push 145.3 | pq_peak 125.3 | mem_kb 18 | path_len 11.7
+
+
+C:\Users\Collin\Downloads\Single_Source_Shortest_Paths-main> python enhanced_sssp.py
+
+=== Single-Pair Shortest Path (SPSP) Benchmarks ===
+All distances validated against baseline Dijkstra (early stop).
+Metrics: time, pops (PQ pops), relaxes (edge relax), pushes, pq_peak, mem_peak.
+
+--- Graph: grid | size≈10000 | trials=3 ---
+Dijkstra            time(ms) 123.54 ±19.74 | pops 12471.7 | relax 39592.3 | push 12472.3 | pq_peak 240.7 | mem_kb 1365 | path_len 200.3
+A*                  time(ms) 147.08 ±11.18 | pops 12561.3 | relax 39592.3 | push 12563.0 | pq_peak 316.7 | mem_kb 1366 | path_len 201.0
+Bidirectional ALT   time(ms) 12.82 ±5.58 | pops 475.7 | relax 1852.0 | push 1009.0 | pq_peak 535.3 | mem_kb 149 | path_len 200.3
+
+--- Graph: grid | size≈40000 | trials=3 ---
+Dijkstra            time(ms) 704.14 ±178.71 | pops 50161.7 | relax 159197.0 | push 50162.0 | pq_peak 515.0 | mem_kb 5702 | path_len 402.3
+A*                  time(ms) 947.09 ±295.22 | pops 50483.7 | relax 159195.0 | push 50486.0 | pq_peak 650.0 | mem_kb 5711 | path_len 402.3
+Bidirectional ALT   time(ms) 471.31 ±592.38 | pops 10073.7 | relax 29435.0 | push 12013.0 | pq_peak 3514.7 | mem_kb 1540 | path_len 401.7
+
+--- Graph: grid | size≈100000 | trials=3 ---
+Dijkstra            time(ms) 2162.25 ±145.53 | pops 125218.7 | relax 398156.0 | push 125218.7 | pq_peak 796.0 | mem_kb 18950 | path_len 641.0
+A*                  time(ms) 2919.66 ±61.10 | pops 125954.0 | relax 398155.0 | push 125955.3 | pq_peak 1075.3 | mem_kb 18965 | path_len 641.0
+Bidirectional ALT   time(ms) 2387.50 ±1615.02 | pops 54232.0 | relax 150681.3 | push 59445.3 | pq_peak 9956.3 | mem_kb 7099 | path_len 641.7
+
+
+=== Single-Pair Shortest Path (SPSP) Benchmarks ===
+All distances validated against baseline Dijkstra (early stop).
+Metrics: time, pops (PQ pops), relaxes (edge relax), pushes, pq_peak, mem_peak.
+
+--- Graph: er | size≈10000 | trials=3 ---
+Dijkstra            time(ms) 166.70 ±112.26 | pops 4173.0 | relax 25337.0 | push 9114.0 | pq_peak 5476.7 | mem_kb 1154 | path_len 8.3
+A*                  time(ms) 156.02 ±115.69 | pops 4173.0 | relax 25337.0 | push 9114.0 | pq_peak 5476.7 | mem_kb 1237 | path_len 8.3
+Bidirectional ALT   time(ms) 1.06 ±0.37 | pops 14.7 | relax 107.7 | push 95.0 | pq_peak 82.3 | mem_kb 11 | path_len 8.3
+
+--- Graph: er | size≈40000 | trials=3 ---
+Dijkstra            time(ms) 1331.37 ±255.87 | pops 39028.0 | relax 197500.7 | push 54651.3 | pq_peak 30311.7 | mem_kb 8064 | path_len 10.7
+A*                  time(ms) 1451.62 ±266.75 | pops 39028.0 | relax 197500.7 | push 54651.3 | pq_peak 30311.7 | mem_kb 8490 | path_len 10.7
+Bidirectional ALT   time(ms) 1.69 ±0.46 | pops 26.7 | relax 186.3 | push 161.7 | pq_peak 137.0 | mem_kb 18 | path_len 10.7
+
+--- Graph: er | size≈100000 | trials=3 ---
+Dijkstra            time(ms) 2566.43 ±1124.64 | pops 62320.3 | relax 365944.7 | push 121330.7 | pq_peak 72194.3 | mem_kb 19061 | path_len 11.7
+A*                  time(ms) 2878.08 ±993.65 | pops 62320.3 | relax 365944.7 | push 121330.7 | pq_peak 72194.3 | mem_kb 20274 | path_len 11.7
+Bidirectional ALT   time(ms) 1.88 ±0.45 | pops 22.0 | relax 165.3 | push 145.3 | pq_peak 125.3 | mem_kb 18 | path_len 11.7
+
+
+C:\Users\Collin\Downloads\Single_Source_Shortest_Paths-main>
