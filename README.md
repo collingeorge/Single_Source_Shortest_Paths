@@ -183,8 +183,8 @@ All results are fully reproducible:
 
 ```bash
 # Reproduce all results
-git clone https://github.com/collingeorge/ai-accelerated-al
-cd Single_Source_Shortest_Paths
+git clone https://github.com/collingeorge/ai-accelerated-alt
+cd ai-accelerated-alt
 python benchmark_alt.py --full-suite
 ```
 
@@ -197,7 +197,7 @@ If you use this implementation or validation methodology in research:
   title={Bidirectional ALT Algorithm: AI-Assisted Implementation and Validation},
   author={George, Collin Blaine},
   year={2025},
-  url={https://github.com/collingeorge/ai-accelerated-al},
+  url={https://github.com/collingeorge/ai-accelerated-alt},
   note={Collaborative AI development with ChatGPT-4, Claude, and Grok}
 }
 ```
